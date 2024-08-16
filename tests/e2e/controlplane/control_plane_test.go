@@ -18,6 +18,8 @@ package controlplane
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -134,6 +136,9 @@ metadata:
 				BeforeAll(func() {
 					Expect(kubectl.CreateNamespace(controlPlaneNamespace)).To(Succeed(), "Istio namespace failed to be created")
 					Expect(kubectl.CreateNamespace(istioCniNamespace)).To(Succeed(), "IstioCNI namespace failed to be created")
+					Expect(kubectl.CreateNamespace(bookinfoNamespace)).To(Succeed(), "Bookinfo namespace failed to be created")
+					Expect(kubectl.Patch("", "namespace", bookinfoNamespace, "--type=merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
+						To(Succeed(), "Error patching bookinfo namespace")
 				})
 
 				When("the IstioCNI CR is created", func() {
@@ -231,6 +236,31 @@ spec:
 						Eventually(kubectl.Logs).WithArguments(namespace, "deploy/"+deploymentName, ptr.Of(30*time.Second)).
 							ShouldNot(ContainSubstring("Reconciliation done"), "Istio Operator is continuously reconciling")
 						Success("Istio Operator stopped reconciling")
+					})
+
+					It("can be deployed bookinfo with sidecar inyection", func(ctx SpecContext) {
+						By("Deploying bookinfo")
+						bookinfoYAML, err := getBookinfoYAML(version.Name)
+						Expect(err).To(Succeed(), "Error getting bookinfo YAML")
+						Expect(kubectl.Apply(bookinfoNamespace, bookinfoYAML)).To(Succeed(), "Bookinfo failed to be deployed")
+
+						By("Waiting for bookinfo to be ready")
+						Eventually(common.GetObject).WithArguments(ctx, cl, kube.Key("productpage-v1", bookinfoNamespace), &appsv1.Deployment{}).
+							Should(HaveCondition(appsv1.DeploymentAvailable, metav1.ConditionTrue), "Bookinfo is not Available")
+						Success("Bookinfo is ready")
+
+						By("Checking sidecar injection match the expected version")
+						pods, err := kubectl.GetPods(bookinfoNamespace, "-o jsonpath='{.items[*].metadata.name}'")
+						Expect(err).To(Succeed(), "Error getting bookinfo pods")
+						podNames := strings.Fields(pods)
+						Expect(podNames).ToNot(BeEmpty(), "No pods found in bookinfo namespace")
+
+						for _, podName := range podNames {
+							sidecarVersion, err := kubectl.Exec(bookinfoNamespace, podName, "istioctl version --short")
+							Expect(err).To(Succeed(), "Error getting sidecar version")
+							Expect(sidecarVersion).To(ContainSubstring(version.Version), "Sidecar injection version does not match the expected version")
+						}
+						Success("Sidecar injection is working")
 					})
 				})
 
@@ -354,4 +384,23 @@ func forceDeleteIstioResources() error {
 	}
 
 	return nil
+}
+
+func getBookinfoYAML(version string) (string, error) {
+	if version == "latest" {
+		version = "master"
+	}
+
+	response, err := http.Get(fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/bookinfo/platform/kube/bookinfo.yaml", version))
+	if err != nil {
+		return "", fmt.Errorf("error getting bookinfo YAML: %w", err)
+	}
+
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading bookinfo YAML: %w", err)
+	}
+
+	return string(body), nil
 }

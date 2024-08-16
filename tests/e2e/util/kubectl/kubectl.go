@@ -51,9 +51,20 @@ func CreateFromString(yamlString string) error {
 }
 
 // ApplyString applies the given yaml string to the cluster
-func ApplyString(yamlString string) error {
-	cmd := kubectl("apply --server-side -f -")
+func ApplyString(ns, yamlString string) error {
+	cmd := kubectl("apply -n %s --server-side -f -", ns)
 	_, err := shell.ExecuteCommandWithInput(cmd, yamlString)
+	if err != nil {
+		return fmt.Errorf("error applying yaml: %w", err)
+	}
+
+	return nil
+}
+
+// Apply applies the given yaml file to the cluster
+func Apply(ns, yamlFile string) error {
+	cmd := kubectl("apply -n %s -f %s", ns, yamlFile)
+	_, err := shell.ExecuteCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("error applying yaml: %w", err)
 	}
