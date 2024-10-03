@@ -244,6 +244,17 @@ func (k Kubectl) Exec(pod, container, command string) (string, error) {
 	return output, nil
 }
 
+// ExecuteKubectlCmd executes a kubectl command. Useful for commands that don't have a specific method
+func (k *KubectlBuilder) ExecuteKubectlCmd(cmd string) (string, error) {
+	cmd = k.build(cmd)
+	output, err := k.executeCommand(cmd)
+	if err != nil {
+		return "", fmt.Errorf("error executing kubectl command: %w, output: %s", err, output)
+	}
+
+	return output, nil
+}
+
 // GetEvents returns the events of a namespace
 func (k Kubectl) GetEvents() (string, error) {
 	cmd := k.build(" get events")

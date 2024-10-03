@@ -209,7 +209,7 @@ spec:
 
 						// Install a remote secret in Primary cluster that provides access to the Remote cluster API server.
 						By("Creating Remote Secret on Primary Cluster")
-						secret, err := istioctl.CreateRemoteSecret(kubeconfig2, "remote", internalIPRemote)
+						secret, err := istioctl.CreateRemoteSecret(kubeconfig2, internalIPRemote, "--name remote")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(k1.WithNamespace(controlPlaneNamespace).ApplyString(secret)).To(Succeed(), "Remote secret creation failed on Primary Cluster")
 					})

@@ -18,6 +18,7 @@ package istioctl
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/env"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/shell"
@@ -45,10 +46,12 @@ func istioctl(format string, args ...interface{}) string {
 // CreateRemoteSecret creates a secret in the remote cluster
 // Arguments:
 // - remoteKubeconfig: kubeconfig of the remote cluster
-// - secretName: name of the secret
 // - internalIP: internal IP of the remote cluster
-func CreateRemoteSecret(remoteKubeconfig string, secretName string, internalIP string) (string, error) {
-	cmd := istioctl("create-remote-secret --kubeconfig %s --name %s --server=https://%s:6443", remoteKubeconfig, secretName, internalIP)
+// - args: extra arguments for the command. For example: "--name secretName"
+func CreateRemoteSecret(remoteKubeconfig string, internalIP string, args ...string) (string, error) {
+	extraArgs := strings.Join(args, " ")
+
+	cmd := istioctl("create-remote-secret --kubeconfig %s --server=https://%s:6443 %s", remoteKubeconfig, internalIP, extraArgs)
 	yaml, err := shell.ExecuteCommand(cmd)
 
 	return yaml, err

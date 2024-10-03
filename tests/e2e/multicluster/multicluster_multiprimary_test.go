@@ -176,12 +176,12 @@ spec:
 						Expect(err).NotTo(HaveOccurred())
 
 						// Install a remote secret in Cluster #1 that provides access to the  Cluster #2 API server.
-						secret, err := istioctl.CreateRemoteSecret(kubeconfig2, "cluster2", internalIPCluster2)
+						secret, err := istioctl.CreateRemoteSecret(kubeconfig2, internalIPCluster2, "--name cluster2")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(k1.ApplyString(secret)).To(Succeed(), "Remote secret creation failed on Cluster #1")
 
 						// Install a remote secret in  Cluster #2 that provides access to the Cluster #1 API server.
-						secret, err = istioctl.CreateRemoteSecret(kubeconfig, "cluster1", internalIPCluster1)
+						secret, err = istioctl.CreateRemoteSecret(kubeconfig, internalIPCluster1, "--name cluster1")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(k2.ApplyString(secret)).To(Succeed(), "Remote secret creation failed on Cluster #1")
 					})

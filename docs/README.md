@@ -26,7 +26,7 @@
   - [Common Setup](#common-setup)
   - [Multi-Primary](#multi-primary---multi-network)
   - [Primary-Remote](#primary-remote---multi-network)
-  - [External Control Plane](#external-controlplane)
+  - [External Control Plane](#external-control-plane)
 - [Addons](#addons)
   - [Deploy Prometheus and Jaeger addons](#deploy-prometheus-and-jaeger-addons)
   - [Deploy Kiali addon](#deploy-kiali-addon)
@@ -892,8 +892,9 @@ In this setup there is an external control plane cluster (`cluster1`) and a remo
     spec:
       version: v${ISTIO_VERSION}
       namespace: istio-system
-      global:
-        network: network1
+      values:
+        global:
+          network: network1
     EOF
     kubectl wait --context "${CTX_CLUSTER1}" --for=condition=Ready istios/default --timeout=3m
     ```

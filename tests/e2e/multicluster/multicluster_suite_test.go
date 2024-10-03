@@ -47,10 +47,11 @@ var (
 	kubeconfig2           = env.Get("KUBECONFIG2", "")
 	artifacts             = env.Get("ARTIFACTS", "/tmp/artifacts")
 
-	eastGatewayYAML   string
-	westGatewayYAML   string
-	exposeServiceYAML string
-	exposeIstiodYAML  string
+	controlPlaneGateway string
+	eastGatewayYAML     string
+	westGatewayYAML     string
+	exposeServiceYAML   string
+	exposeIstiodYAML    string
 
 	k1 kubectl.Kubectl
 	k2 kubectl.Kubectl
@@ -97,6 +98,7 @@ func setup(t *testing.T) {
 	westGatewayYAML = fmt.Sprintf("%s/docs/multicluster/east-west-gateway-net2.yaml", baseRepoDir)
 	exposeServiceYAML = fmt.Sprintf("%s/docs/multicluster/expose-services.yaml", baseRepoDir)
 	exposeIstiodYAML = fmt.Sprintf("%s/docs/multicluster/expose-istiod.yaml", baseRepoDir)
+	controlPlaneGateway = fmt.Sprintf("%s/docs/multicluster/controlplane-gateway.yaml", baseRepoDir)
 
 	// Initialize kubectl utilities, one for each cluster
 	k1 = kubectl.New().WithKubeconfig(kubeconfig)
