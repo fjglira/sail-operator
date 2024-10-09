@@ -40,7 +40,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("Multicluster deployment models", Label("multicluster"), Ordered, func() {
+// To run only test with Label "multicluster" or "external-control-plane" add this to GINKGO_FLAGS: --label-filter="external-control-plane"
+// Currently running to test as: GINKGO_FLAGS="-v --label-filter=external-control-plane" SKIP_CLEANUP=true MULTICLUSTER=true make test.e2e.kind
+var _ = Describe("Multicluster deployment models", Label("multicluster", "external-control-plane"), Ordered, func() {
 	SetDefaultEventuallyTimeout(180 * time.Second)
 	SetDefaultEventuallyPollingInterval(time.Second)
 	externalAddress := ""
