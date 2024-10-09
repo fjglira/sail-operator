@@ -245,7 +245,7 @@ func (k Kubectl) Exec(pod, container, command string) (string, error) {
 }
 
 // ExecuteKubectlCmd executes a kubectl command. Useful for commands that don't have a specific method
-func (k *KubectlBuilder) ExecuteKubectlCmd(cmd string) (string, error) {
+func (k Kubectl) ExecuteKubectlCmd(cmd string) (string, error) {
 	cmd = k.build(cmd)
 	output, err := k.executeCommand(cmd)
 	if err != nil {

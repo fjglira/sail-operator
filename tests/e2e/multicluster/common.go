@@ -34,3 +34,13 @@ func verifyResponsesAreReceivedFromBothClusters(k kubectl.Kubectl, clusterName s
 				fmt.Sprintf("sleep pod in %s did not receive any response from %s", clusterName, v))
 	}
 }
+
+// verifyResponsesAreReceivedFromLocalCluster checks that when the sleep pod in the sample namespace
+// sends a request to the helloworld service, it receives responses from v1 or v2 versions,
+// which are deployed in the same cluster
+func verifyResponsesAreReceivedFromLocalCluster(k kubectl.Kubectl, clusterName string, expectedHelloVersion string) {
+	Eventually(k.WithNamespace("sample").Exec, 10*time.Second, 10*time.Millisecond).
+		WithArguments("deploy/sleep", "sleep", "curl -sS helloworld.sample:5000/hello").
+		Should(ContainSubstring(fmt.Sprintf("Hello version: %s", expectedHelloVersion)),
+			fmt.Sprintf("sleep pod in %s did not receive any response from %s", clusterName, expectedHelloVersion))
+}

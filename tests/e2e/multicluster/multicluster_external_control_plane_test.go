@@ -50,8 +50,8 @@ var _ = Describe("Multicluster deployment models", Label("multicluster", "extern
 	BeforeAll(func(ctx SpecContext) {
 		if !skipDeploy {
 			// Deploy the Sail Operator on both clusters
-			Expect(kubectlClient1.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on External Control Plane Cluster")
-			Expect(kubectlClient2.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Remote Cluster")
+			Expect(k1.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on External Control Plane Cluster")
+			Expect(k2.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Remote Cluster")
 
 			Expect(helm.Install("sail-operator", filepath.Join(project.RootDir, "chart"), "--namespace "+namespace, "--set=image="+image, "--kubeconfig "+kubeconfig)).
 				To(Succeed(), "Operator failed to be deployed in External Control Plane Cluster")
@@ -75,14 +75,15 @@ var _ = Describe("Multicluster deployment models", Label("multicluster", "extern
 		// Test the External Control Plane configuration for each supported Istio version
 		for _, version := range supportedversion.List {
 			// Skip versions less than 1.23.0
-			if version.Major < 1 || (version.Major == 1 && version.Minor < 23) {
+			// version that has the istiod-remote chart. For 1.24, we need to rewrite the support for RemoteIstio.
+			if !(version.Version.Major() == 1 && version.Version.Minor() == 23) {
 				continue
 			}
 
-			Context("Istio version is: "+version.Version, func() {
+			Context(fmt.Sprintf("Istio version %s", version.Version), func() {
 				When("Istio is created in External Control Plane cluster", func() {
 					BeforeAll(func(ctx SpecContext) {
-						Expect(kubectlClient1.CreateNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be created")
+						Expect(k1.CreateNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be created")
 
 						IstioResourceYAML := `
 apiVersion: sailoperator.io/v1alpha1
@@ -97,7 +98,7 @@ spec:
       network: network1`
 						IstioResourceYAML = fmt.Sprintf(IstioResourceYAML, version.Name, controlPlaneNamespace)
 						Log("Istio CR Primary: ", IstioResourceYAML)
-						Expect(kubectlClient1.CreateFromString(IstioResourceYAML)).To(Succeed(), "Istio Resource creation failed on External Control Plane Cluster")
+						Expect(k1.CreateFromString(IstioResourceYAML)).To(Succeed(), "Istio Resource creation failed on External Control Plane Cluster")
 					})
 
 					It("updates Istio CR on External Control Plane cluster status to Ready", func(ctx SpecContext) {
@@ -118,7 +119,7 @@ spec:
 
 				When("Gateway is created on External Control Plane cluster ", func() {
 					BeforeAll(func(ctx SpecContext) {
-						Expect(kubectlClient1.SetNamespace(controlPlaneNamespace).Apply(controlPlaneGateway)).To(Succeed(), "Gateway creation failed on External Control Plane Cluster")
+						Expect(k1.WithNamespace(controlPlaneNamespace).Apply(controlPlaneGateway)).To(Succeed(), "Gateway creation failed on External Control Plane Cluster")
 					})
 
 					It("updates Gateway status to Available", func(ctx SpecContext) {
@@ -137,8 +138,8 @@ spec:
 
 				When("RemoteIstio is created in Remote cluster", func() {
 					BeforeAll(func(ctx SpecContext) {
-						Expect(kubectlClient2.CreateNamespace("external-istiod")).To(Succeed(), "Namespace failed to be created on Remote Cluster")
-						Expect(kubectlClient1.CreateNamespace("external-istiod")).To(Succeed(), "Namespace failed to be created on Remote Cluster")
+						Expect(k2.CreateNamespace("external-istiod")).To(Succeed(), "Namespace failed to be created on Remote Cluster")
+						Expect(k1.CreateNamespace("external-istiod")).To(Succeed(), "Namespace failed to be created on Remote Cluster")
 
 						RemoteIstioExternalYAML := `
 apiVersion: sailoperator.io/v1alpha1
@@ -162,12 +163,12 @@ spec:
 						RemoteIstioExternalYAML = fmt.Sprintf(RemoteIstioExternalYAML, version.Name, externalAddress)
 						Log("RemoteIstio CR: ", RemoteIstioExternalYAML)
 						By("Creating RemoteIstio CR on Remote Cluster")
-						Expect(kubectlClient2.CreateFromString(RemoteIstioExternalYAML)).To(Succeed(), "RemoteIstio Resource creation failed on Remote Cluster")
+						Expect(k2.CreateFromString(RemoteIstioExternalYAML)).To(Succeed(), "RemoteIstio Resource creation failed on Remote Cluster")
 
 						// To be able to access the remote cluster from the External Control Plane cluster, we need to create a secret in the External Control Plane cluster
 						// RemoteIstio resource will not be Ready until the secret is created
 						// Get the internal IP of the control plane node in Remote cluster
-						internalIPRemote, err := kubectlClient2.GetInternalIP("node-role.kubernetes.io/control-plane")
+						internalIPRemote, err := k2.GetInternalIP("node-role.kubernetes.io/control-plane")
 						Expect(internalIPRemote).NotTo(BeEmpty(), "Internal IP is empty for Remote Cluster")
 						Expect(err).NotTo(HaveOccurred())
 
@@ -176,11 +177,11 @@ spec:
 
 						// Install a remote secret in External Control Plane cluster that provides access to the Remote cluster API server.
 						By("Creating Remote Secret on External Control Plane Cluster")
-						_, err = kubectlClient1.SetNamespace("external-istiod").ExecuteKubectlCmd("create sa istiod-service-account")
+						_, err = k1.WithNamespace("external-istiod").ExecuteKubectlCmd("create sa istiod-service-account")
 						Expect(err).NotTo(HaveOccurred(), "Error creating service account on External Control Plane Cluster")
 						secret, err := istioctl.CreateRemoteSecret(kubeconfig2, internalIPRemote, "--type=config", "--namespace=external-istiod", "--service-account=istiod-external-istiod", "--create-service-account=false")
 						Expect(err).NotTo(HaveOccurred(), "Error creating secret on External Control Plane Cluster")
-						Expect(kubectlClient1.ApplyString(secret)).To(Succeed(), "Remote secret creation failed on External Control Plane Cluster")
+						Expect(k1.ApplyString(secret)).To(Succeed(), "Remote secret creation failed on External Control Plane Cluster")
 					})
 
 					It("secret is created", func(ctx SpecContext) {
@@ -240,7 +241,7 @@ spec:
 
 						istioExternalYAML = fmt.Sprintf(istioExternalYAML, externalAddress, externalAddress)
 						Log("Istio CR External: ", istioExternalYAML)
-						Expect(kubectlClient1.CreateFromString(istioExternalYAML)).To(Succeed(), "Istio Resource creation failed on External Control Plane Cluster")
+						Expect(k1.CreateFromString(istioExternalYAML)).To(Succeed(), "Istio Resource creation failed on External Control Plane Cluster")
 						Success("Istio CR is created in namespace external-istiod on External Control Plane cluster")
 					})
 
@@ -311,7 +312,7 @@ spec:
           port:
             number: 443`
 						Log("Resource to route traffic: ", resourceYAML)
-						Expect(kubectlClient1.CreateFromString(resourceYAML)).To(Succeed(), "Resource creation failed on External Control Plane Cluster")
+						Expect(k1.CreateFromString(resourceYAML)).To(Succeed(), "Resource creation failed on External Control Plane Cluster")
 						Success("Resources to route traffic are created in External Control Plane cluster")
 					})
 
@@ -350,20 +351,15 @@ spec:
 								// Skip the gateway pod
 								continue
 							}
-							sidecarVersion, err := getProxyVersion(pod.Name, "sample")
+							sidecarVersion, err := common.GetProxyVersion(pod.Name, "sample")
 							Expect(err).To(Succeed(), "Error getting sidecar version")
-							Expect(sidecarVersion).To(ContainSubstring(version.Version), "Sidecar Istio version does not match the expected version")
+							Expect(sidecarVersion).To(Equal(version.Version), "Sidecar Istio version does not match the expected version")
 						}
 						Success("Istio sidecar version matches the expected Istio version")
 					})
 
 					It("can access the sample app from both clusters", func(ctx SpecContext) {
-						sleepPodNameRemote, err := common.GetPodNameByLabel(ctx, clRemote, "sample", "app", "sleep")
-						Expect(sleepPodNameRemote).NotTo(BeEmpty(), "Sleep pod not found on Remote Cluster")
-						Expect(err).NotTo(HaveOccurred(), "Error getting sleep pod name on Remote Cluster")
-
-						remoteResponses := strings.Join(getListCurlResponses(kubectlClient2, sleepPodNameRemote), "\n")
-						Expect(remoteResponses).To(ContainSubstring("Hello version: v1"), "Responses from Remote Cluster are not the expected")
+						verifyResponsesAreReceivedFromLocalCluster(k2, "Cluster #2", "v1")
 						Success("Sample app is accessible in Remote cluster")
 					})
 				})
@@ -375,18 +371,18 @@ spec:
 						err := clRemote.Get(ctx, kube.Key("gateways.gateway.networking.k8s.io"), crdGateway)
 						if err != nil {
 							// Generate the ingress gateway yaml using kustomize
-							output, err := kubectlClient2.ExecuteKubectlCmd("kustomize github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.1.0")
+							output, err := k2.ExecuteKubectlCmd("kustomize github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.1.0")
 							Expect(err).NotTo(HaveOccurred(), "Error executing kustomize command")
-							Expect(kubectlClient2.ApplyString(output)).To(Succeed(), "Error creating gateway crd in Remote Cluster")
+							Expect(k2.ApplyString(output)).To(Succeed(), "Error creating gateway crd in Remote Cluster")
 						}
 
-						// Expose hello-world through the ingress gateway
-						istioBranch := version.Version
+						istioBranch := version.Version.String()
+						// Deploy the sample app from upstream URL in both clusters
 						if version.Name == "latest" {
 							istioBranch = "master"
 						}
 						helloworldGatewayURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/helloworld/gateway-api/helloworld-gateway.yaml", istioBranch)
-						Expect(kubectlClient2.SetNamespace("sample").Apply(helloworldGatewayURL)).To(Succeed(), "Gateway creation failed on Remote Cluster")
+						Expect(k2.WithNamespace("sample").Apply(helloworldGatewayURL)).To(Succeed(), "Gateway creation failed on Remote Cluster")
 					})
 
 					It("updates Gateway status to Available", func(ctx SpecContext) {
@@ -398,7 +394,7 @@ spec:
 
 					It("is accessible helloworld through the ingress gateway created in the Remote cluster", func(ctx SpecContext) {
 						// Get ingress gateway url from the Remote cluster
-						url, err := kubectlClient2.SetNamespace("sample").ExecuteKubectlCmd("get gtw helloworld-gateway -o jsonpath='{.status.addresses[0].value}'")
+						url, err := k2.WithNamespace("sample").ExecuteKubectlCmd("get gtw helloworld-gateway -o jsonpath='{.status.addresses[0].value}'")
 						Expect(err).NotTo(HaveOccurred(), "Error getting gateway URL from Remote Cluster")
 						Expect(url).NotTo(BeEmpty(), "Gateway URL is empty")
 						response, err := shell.ExecuteCommand(fmt.Sprintf("curl -s %s:80/hello", url))
@@ -410,8 +406,8 @@ spec:
 
 				// When("Istio CR and RemoteIstio CR are deleted in both clusters", func() {
 				// 	BeforeEach(func() {
-				// 		Expect(kubectlClient1.SetNamespace(controlPlaneNamespace).Delete("istio", istioName)).To(Succeed(), "Istio CR failed to be deleted")
-				// 		Expect(kubectlClient2.SetNamespace(controlPlaneNamespace).Delete("remoteistio", istioName)).To(Succeed(), "RemoteIstio CR failed to be deleted")
+				// 		Expect(k1.WithNamespace(controlPlaneNamespace).Delete("istio", istioName)).To(Succeed(), "Istio CR failed to be deleted")
+				// 		Expect(k2.WithNamespace(controlPlaneNamespace).Delete("remoteistio", istioName)).To(Succeed(), "RemoteIstio CR failed to be deleted")
 				// 		Success("Istio and RemoteIstio are deleted")
 				// 	})
 
@@ -424,16 +420,16 @@ spec:
 
 				// AfterAll(func(ctx SpecContext) {
 				// 	// Delete namespace to ensure clean up for new tests iteration
-				// 	Expect(kubectlClient1.DeleteNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
-				// 	Expect(kubectlClient2.DeleteNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
+				// 	Expect(k1.DeleteNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
+				// 	Expect(k2.DeleteNamespace(controlPlaneNamespace)).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
 
 				// 	common.CheckNamespaceEmpty(ctx, clPrimary, controlPlaneNamespace)
 				// 	common.CheckNamespaceEmpty(ctx, clRemote, controlPlaneNamespace)
 				// 	Success("ControlPlane Namespaces are empty")
 
 				// 	// Delete the entire sample namespace in both clusters
-				// 	Expect(kubectlClient1.DeleteNamespace("sample")).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
-				// 	Expect(kubectlClient2.DeleteNamespace("sample")).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
+				// 	Expect(k1.DeleteNamespace("sample")).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
+				// 	Expect(k2.DeleteNamespace("sample")).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
 
 				// 	common.CheckNamespaceEmpty(ctx, clPrimary, "sample")
 				// 	common.CheckNamespaceEmpty(ctx, clRemote, "sample")
@@ -445,8 +441,8 @@ spec:
 
 	// AfterAll(func(ctx SpecContext) {
 	// 	// Delete the Sail Operator from both clusters
-	// 	Expect(kubectlClient1.DeleteNamespace(namespace)).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
-	// 	Expect(kubectlClient2.DeleteNamespace(namespace)).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
+	// 	Expect(k1.DeleteNamespace(namespace)).To(Succeed(), "Namespace failed to be deleted on Primary Cluster")
+	// 	Expect(k2.DeleteNamespace(namespace)).To(Succeed(), "Namespace failed to be deleted on Remote Cluster")
 
 	// 	// Check that the namespace is empty
 	// 	common.CheckNamespaceEmpty(ctx, clPrimary, namespace)
@@ -457,34 +453,22 @@ spec:
 // deploySample deploys the sample in the remote cluster
 func deploySample(ns string, istioVersion supportedversion.VersionInfo) {
 	// Create the namespace
-	Expect(kubectlClient2.CreateNamespace(ns)).To(Succeed(), "Namespace failed to be created")
+	Expect(k2.CreateNamespace(ns)).To(Succeed(), "Namespace failed to be created")
 
 	// Label the namespace
-	Expect(kubectlClient2.Patch("namespace", ns, "merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
+	Expect(k2.Patch("namespace", ns, "merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
 		To(Succeed(), "Error patching sample namespace")
 
-	version := istioVersion.Version
+	version := istioVersion.Version.String()
 	// Deploy the sample app from upstream URL in both clusters
 	if istioVersion.Name == "latest" {
 		version = "master"
 	}
 	helloWorldURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/helloworld/helloworld.yaml", version)
-	Expect(kubectlClient2.SetNamespace(ns).ApplyWithLabels(helloWorldURL, "service=helloworld")).To(Succeed(), "Sample service deploy failed on  Cluster #2")
+	Expect(k2.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "service=helloworld")).To(Succeed(), "Sample service deploy failed on  Cluster #2")
 
-	Expect(kubectlClient2.SetNamespace(ns).ApplyWithLabels(helloWorldURL, "version=v1")).To(Succeed(), "Sample service deploy failed on  Cluster #2")
+	Expect(k2.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "version=v1")).To(Succeed(), "Sample service deploy failed on  Cluster #2")
 
 	sleepURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/sleep/sleep.yaml", version)
-	Expect(kubectlClient2.SetNamespace(ns).Apply(sleepURL)).To(Succeed(), "Sample sleep deploy failed on  Cluster #2")
-}
-
-func getProxyVersion(podName, namespace string) (string, error) {
-	proxyVersion, err := kubectlClient2.SetNamespace(namespace).Exec(
-		podName,
-		"istio-proxy",
-		`curl -s http://localhost:15000/server_info | grep "ISTIO_VERSION" | awk -F '"' '{print $4}'`)
-	if err != nil {
-		return "", fmt.Errorf("error getting sidecar version: %w", err)
-	}
-
-	return proxyVersion, nil
+	Expect(k2.WithNamespace(ns).Apply(sleepURL)).To(Succeed(), "Sample sleep deploy failed on  Cluster #2")
 }

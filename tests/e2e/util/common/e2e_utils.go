@@ -55,6 +55,24 @@ var (
 	k = kubectl.New()
 )
 
+// GetProxyVersion returns the version of the sidecar proxy in the given pod
+func GetProxyVersion(podName, namespace string) (*semver.Version, error) {
+	output, err := k.WithNamespace(namespace).Exec(
+		podName,
+		"istio-proxy",
+		`curl -s http://localhost:15000/server_info | grep "ISTIO_VERSION" | awk -F '"' '{print $4}'`)
+	if err != nil {
+		return nil, fmt.Errorf("error getting sidecar version: %w", err)
+	}
+
+	versionStr := strings.TrimSpace(output)
+	version, err := semver.NewVersion(versionStr)
+	if err != nil {
+		return version, fmt.Errorf("error parsing sidecar version %q: %w", versionStr, err)
+	}
+	return version, err
+}
+
 // GetObject returns the object with the given key
 func GetObject(ctx context.Context, cl client.Client, key client.ObjectKey, obj client.Object) (client.Object, error) {
 	err := cl.Get(ctx, key, obj)
