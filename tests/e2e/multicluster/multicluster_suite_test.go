@@ -24,10 +24,12 @@ import (
 
 	"github.com/istio-ecosystem/sail-operator/pkg/env"
 	"github.com/istio-ecosystem/sail-operator/pkg/kube"
+	. "github.com/istio-ecosystem/sail-operator/pkg/test/util/ginkgo"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/certs"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/cleaner"
 	k8sclient "github.com/istio-ecosystem/sail-operator/tests/e2e/util/client"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/common"
+	. "github.com/istio-ecosystem/sail-operator/tests/e2e/util/gomega"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/kubectl"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,6 +42,7 @@ var (
 	clPrimary                     client.Client
 	clRemote                      client.Client
 	err                           error
+	debugInfoLogged               bool
 	namespace                     = env.Get("NAMESPACE", "sail-operator")
 	deploymentName                = env.Get("DEPLOYMENT_NAME", "sail-operator")
 	controlPlaneNamespace         = env.Get("CONTROL_PLANE_NS", "istio-system")
@@ -47,7 +50,6 @@ var (
 	istioName                     = env.Get("ISTIO_NAME", "default")
 	istioCniNamespace             = env.Get("ISTIOCNI_NAMESPACE", "istio-cni")
 	istioCniName                  = env.Get("ISTIOCNI_NAME", "default")
-	image                         = env.Get("IMAGE", "quay.io/maistra-dev/sail-operator:latest")
 	skipDeploy                    = env.GetBool("SKIP_DEPLOY", false)
 	multicluster                  = env.GetBool("MULTICLUSTER", false)
 	keepOnFailure                 = env.GetBool("KEEP_ON_FAILURE", false)
@@ -64,6 +66,9 @@ var (
 
 	k1 kubectl.Kubectl
 	k2 kubectl.Kubectl
+
+	clr1 cleaner.Cleaner
+	clr2 cleaner.Cleaner
 )
 
 func TestMultiCluster(t *testing.T) {
@@ -125,10 +130,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(k1.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Primary Cluster")
 	Expect(k2.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Remote Cluster")
 
-	Eventually(common.InstallOperatorViaHelm).WithArguments("--kubeconfig", kubeconfig).
+	Expect(common.InstallOperatorViaHelm("--kubeconfig", kubeconfig)).
 		To(Succeed(), "Operator failed to be deployed in Primary Cluster")
 
-	Eventually(common.InstallOperatorViaHelm).WithArguments("--kubeconfig", kubeconfig2).
+	Expect(common.InstallOperatorViaHelm("--kubeconfig", kubeconfig2)).
 		To(Succeed(), "Operator failed to be deployed in Remote Cluster")
 
 	Eventually(common.GetObject).
@@ -142,8 +147,8 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Success("Operator is deployed in the Remote namespace and Running")
 })
 
-var _ = ReportAfterSuite("Condiotnal cleanup", func(ctx SpecContext, r Report) {
-	if !r.SuiteSucceeded {
+var _ = AfterSuite(func(ctx SpecContext) {
+	if CurrentSpecReport().Failed() {
 		if !debugInfoLogged {
 			common.LogDebugInfo(common.MultiCluster, k1, k2)
 		}
