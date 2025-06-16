@@ -23,11 +23,16 @@ import (
 	"testing"
 
 	"github.com/istio-ecosystem/sail-operator/pkg/env"
+	"github.com/istio-ecosystem/sail-operator/pkg/kube"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/certs"
+	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/cleaner"
 	k8sclient "github.com/istio-ecosystem/sail-operator/tests/e2e/util/client"
+	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/common"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/kubectl"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -105,4 +110,51 @@ func setup(t *testing.T) {
 	// Initialize kubectl utilities, one for each cluster
 	k1 = kubectl.New().WithKubeconfig(kubeconfig)
 	k2 = kubectl.New().WithKubeconfig(kubeconfig2)
+	clr1 = cleaner.New(clPrimary, "cluster=primary")
+	clr2 = cleaner.New(clRemote, "cluster=remote")
 }
+
+var _ = BeforeSuite(func(ctx SpecContext) {
+	clr1.Record(ctx)
+	clr2.Record(ctx)
+
+	if skipDeploy {
+		return
+	}
+
+	Expect(k1.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Primary Cluster")
+	Expect(k2.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created on Remote Cluster")
+
+	Eventually(common.InstallOperatorViaHelm).WithArguments("--kubeconfig", kubeconfig).
+		To(Succeed(), "Operator failed to be deployed in Primary Cluster")
+
+	Eventually(common.InstallOperatorViaHelm).WithArguments("--kubeconfig", kubeconfig2).
+		To(Succeed(), "Operator failed to be deployed in Remote Cluster")
+
+	Eventually(common.GetObject).
+		WithArguments(ctx, clPrimary, kube.Key(deploymentName, namespace), &appsv1.Deployment{}).
+		Should(HaveConditionStatus(appsv1.DeploymentAvailable, metav1.ConditionTrue), "Error getting Istio CRD")
+	Success("Operator is deployed in the Primary namespace and Running")
+
+	Eventually(common.GetObject).
+		WithArguments(ctx, clRemote, kube.Key(deploymentName, namespace), &appsv1.Deployment{}).
+		Should(HaveConditionStatus(appsv1.DeploymentAvailable, metav1.ConditionTrue), "Error getting Istio CRD")
+	Success("Operator is deployed in the Remote namespace and Running")
+})
+
+var _ = ReportAfterSuite("Condiotnal cleanup", func(ctx SpecContext, r Report) {
+	if !r.SuiteSucceeded {
+		if !debugInfoLogged {
+			common.LogDebugInfo(common.MultiCluster, k1, k2)
+		}
+
+		if keepOnFailure {
+			return
+		}
+	}
+
+	c1Deleted := clr1.CleanupNoWait(ctx)
+	c2Deleted := clr2.CleanupNoWait(ctx)
+	clr1.WaitForDeletion(ctx, c1Deleted)
+	clr2.WaitForDeletion(ctx, c2Deleted)
+})
