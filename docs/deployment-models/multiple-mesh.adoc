@@ -1,18 +1,22 @@
-[Return to Project Root](../../README.md)
+include::../_variables.adoc[]
 
-# Table of Contents
-- [Multiple meshes on a single cluster](#multiple-meshes-on-a-single-cluster)
-  - [Prerequisites](#prerequisites)
-  - [Installation Steps](#installation-steps)
-    - [Deploying the control planes](#deploying-the-control-planes)
-    - [Verifying the control planes](#verifying-the-control-planes)
-    - [Deploying the applications](#deploying-the-applications)
-  - [Validation](#validation)
-    - [Checking application to control plane mapping](#checking-application-to-control-plane-mapping)
-    - [Checking application connectivity](#checking-application-connectivity)
-  - [Cleanup](#cleanup)
+link:../../README.md[Return to Project Root]
 
-## Multiple meshes on a single cluster
+[[toc]]
+== Table of Contents
+- <<multiple-meshes-on-a-single-cluster,Multiple meshes on a single cluster>>
+  - <<prerequisites,Prerequisites>>
+  - <<installation-steps,Installation Steps>>
+    - <<deploying-the-control-planes,Deploying the control planes>>
+    - <<verifying-the-control-planes,Verifying the control planes>>
+    - <<deploying-the-applications,Deploying the applications>>
+  - <<validation,Validation>>
+    - <<checking-application-to-control-plane-mapping,Checking application to control plane mapping>>
+    - <<checking-application-connectivity,Checking application connectivity>>
+  - <<cleanup,Cleanup>>
+
+[[multiple-meshes-on-a-single-cluster]]
+== Multiple meshes on a single cluster
 
 The Sail Operator supports running multiple meshes on a single cluster and associating each workload with a specific mesh. 
 Each mesh is managed by a separate control plane.
@@ -30,19 +34,23 @@ This guide explains how to set up two meshes: `mesh1` and `mesh2` in namespaces 
 Mesh 1 will manage namespace `app1`, and Mesh 2 will manage namespaces `app2a` and `app2b`.
 Because each mesh will use its own root certificate authority and configured to use a peer authentication policy with the `STRICT` mTLS mode, the communication between the two meshes will not be allowed. 
 
-### Prerequisites
+[[prerequisites]]
+=== Prerequisites
 
-- Install [istioctl](../../docs/common/install-istioctl-tool.md).
+- Install link:../../docs/common/install-istioctl-tool.md[istioctl].
 - Kubernetes 1.23 cluster.
 - kubeconfig file with a context for the Kubernetes cluster.
 - Install the Sail Operator and the Sail CRDs to the cluster.
 
-### Installation Steps
+[[installation-steps]]
+=== Installation Steps
 
-#### Deploying the control planes
+[[deploying-the-control-planes]]
+==== Deploying the control planes
 
 1. Create the system namespace `istio-system1` and deploy the `mesh1` control plane in it.
-   ```bash { name=deploy-mesh1 tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl create namespace istio-system1
    kubectl label ns istio-system1 mesh=mesh1
    kubectl apply -f - <<EOF
@@ -59,7 +67,7 @@ Because each mesh will use its own root certificate authority and configured to 
          - matchLabels:
              mesh: mesh1
    EOF
-   ```
+   ----
 <!--
 ```bash { name=validation-wait-istio-pods tag=multiple-meshes}
     . $SCRIPT_DIR/prebuilt-func.sh
@@ -68,7 +76,8 @@ Because each mesh will use its own root certificate authority and configured to 
 ```
 -->
 2. Create the system namespace `istio-system2` and deploy the `mesh2` control plane in it.
-   ```bash { name=deploy-mesh2 tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl create namespace istio-system2
    kubectl label ns istio-system2 mesh=mesh2
    kubectl apply -f - <<EOF
@@ -85,7 +94,7 @@ Because each mesh will use its own root certificate authority and configured to 
          - matchLabels:
              mesh: mesh2
    EOF
-   ```
+   ----
 <!--
 ```bash { name=validation-wait-istio-pods tag=multiple-meshes}
     . $SCRIPT_DIR/prebuilt-func.sh
@@ -94,7 +103,8 @@ Because each mesh will use its own root certificate authority and configured to 
 ```
 -->
 3. Create a peer authentication policy that only allows mTLS communication within each mesh.
-   ```bash { name=peer-authentication tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl apply -f - <<EOF
    apiVersion: security.istio.io/v1
    kind: PeerAuthentication
@@ -116,17 +126,19 @@ Because each mesh will use its own root certificate authority and configured to 
      mtls:
        mode: STRICT
    EOF
-   ```  
+   ----
 
-#### Verifying the control planes
+[[verifying-the-control-planes]]
+==== Verifying the control planes
 
 1. Check the labels on the control plane namespaces:
-   ```console
+   [source,console]
+   ----
    $ kubectl get ns -l mesh -L mesh
    NAME            STATUS   AGE    MESH
    istio-system1   Active   106s   mesh1
    istio-system2   Active   105s   mesh2
-   ```
+   ----
 <!--
 ```bash { name=validation-control-planes-ns tag=multiple-meshes}
    kubectl get ns -l mesh -L mesh
@@ -135,19 +147,21 @@ Because each mesh will use its own root certificate authority and configured to 
 ```
 -->
 2. Check the control planes are `Healthy`:
-   ```console
+   [source,console]
+   ----
    $ kubectl get istios
    NAME    REVISIONS   READY   IN USE   ACTIVE REVISION   STATUS    VERSION   AGE
    mesh1   1           1       0        mesh1             Healthy   v1.24.0   84s
    mesh2   1           1       0        mesh2             Healthy   v1.24.0   77s
-   ```
+   ----
 <!--
 ```bash { name=validation-istios tag=multiple-meshes}
    kubectl get istios
 ```
 -->
 3. Confirm that the validation and mutation webhook configurations exist for both meshes:
-   ```console
+   [source,console]
+   ----
    $ kubectl get validatingwebhookconfigurations
    NAME                                  WEBHOOKS   AGE
    istio-validator-mesh1-istio-system1   1          2m45s
@@ -157,38 +171,43 @@ Because each mesh will use its own root certificate authority and configured to 
    NAME                                         WEBHOOKS   AGE
    istio-sidecar-injector-mesh1-istio-system1   2          5m55s
    istio-sidecar-injector-mesh2-istio-system2   2          5m48s
-   ```
+   ----
 <!--
 ```bash { name=validation-webhook-configs tag=multiple-meshes}
    kubectl get validatingwebhookconfigurations
    kubectl get mutatingwebhookconfigurations
 ```
 -->
-#### Deploying the applications
+[[deploying-the-applications]]
+==== Deploying the applications
 
 1. Create three application namespaces:
-   ```bash { name=create-app-namespaces tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl create ns app1 
    kubectl create ns app2a 
    kubectl create ns app2b
-   ```
+   ----
 
 2. Label each namespace to enable discovery by the corresponding control plane:
-   ```bash { name=label-app-namespaces tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl label ns app1 mesh=mesh1
    kubectl label ns app2a mesh=mesh2
    kubectl label ns app2b mesh=mesh2
-   ```
+   ----
 
 3. Label each namespace to enable injection by the corresponding control plane:
-   ```bash { name=label-rev-app-namespaces tag=multiple-meshes}
+   [source,bash]
+   ----
    kubectl label ns app1 istio.io/rev=mesh1
    kubectl label ns app2a istio.io/rev=mesh2
    kubectl label ns app2b istio.io/rev=mesh2
-   ```
+   ----
 
 4. Deploy the `curl` and `httpbin` sample applications in each namespace:
-   ```bash { name=deploy-apps tag=multiple-meshes}
+   [source,bash]
+   ----
    # Deploy curl and httpbin in app1
    kubectl -n app1 apply -f https://raw.githubusercontent.com/istio/istio/refs/heads/master/samples/curl/curl.yaml 
    kubectl -n app1 apply -f https://raw.githubusercontent.com/istio/istio/refs/heads/master/samples/httpbin/httpbin.yaml 
@@ -198,7 +217,7 @@ Because each mesh will use its own root certificate authority and configured to 
    # Deploy curl and httpbin in app2b
    kubectl -n app2b apply -f https://raw.githubusercontent.com/istio/istio/refs/heads/master/samples/curl/curl.yaml 
    kubectl -n app2b apply -f https://raw.githubusercontent.com/istio/istio/refs/heads/master/samples/httpbin/httpbin.yaml 
-   ```
+   ----
 <!--
 ```bash { name=validation-app-deployed tag=multiple-meshes}
     . $SCRIPT_DIR/prebuilt-func.sh
@@ -214,7 +233,8 @@ Because each mesh will use its own root certificate authority and configured to 
 ```
 -->
 5. Confirm that a sidecar has been injected into each of the application pods. The value `2/2` should be displayed in the `READY` column for each pod, as in the following example:
-   ```console
+   [source,console]
+   ----
    $ kubectl get pods -n app1
    NAME                       READY   STATUS    RESTARTS   AGE
    curl-5b549b49b8-mg7nl      2/2     Running   0          102s
@@ -229,52 +249,58 @@ Because each mesh will use its own root certificate authority and configured to 
    NAME                       READY   STATUS    RESTARTS   AGE
    curl-5b549b49b8-xnzzk      2/2     Running   0          2m9s
    httpbin-7b549f7859-7k5gf   2/2     Running   0          118s
-   ```
+   ----
 
-### Validation
+[[validation]]
+=== Validation
 
-#### Checking application to control plane mapping
+[[checking-application-to-control-plane-mapping]]
+==== Checking application to control plane mapping
 
 Use the `istioctl ps` command to confirm that the application pods are connected to the correct control plane. 
 
 The `curl` and `httpbin` pods in namespace `app1` should be connected to the control plane in namespace `istio-system1`, as shown in the following example (note the `.app1` suffix in the `NAME` column):
 
-```console
+[source,console]
+----
 $ istioctl ps -i istio-system1
 NAME                              CLUSTER        CDS                LDS                EDS                RDS                ECDS        ISTIOD                            VERSION
 curl-5b549b49b8-mg7nl.app1        Kubernetes     SYNCED (4m40s)     SYNCED (4m40s)     SYNCED (4m31s)     SYNCED (4m40s)     IGNORED     istiod-mesh1-5df45b97dd-tf2wl     1.24.0
 httpbin-7b549f7859-h6hnk.app1     Kubernetes     SYNCED (4m31s)     SYNCED (4m31s)     SYNCED (4m31s)     SYNCED (4m31s)     IGNORED     istiod-mesh1-5df45b97dd-tf2wl     1.24.0
-```
+----
 
 The pods in namespaces `app2a` and `app2b` should be connected to the control plane in namespace `istio-system2`:
 
-```console
+[source,console]
+----
 $ istioctl ps -i istio-system2
 NAME                               CLUSTER        CDS                LDS                EDS                RDS                ECDS        ISTIOD                            VERSION
 curl-5b549b49b8-2hlvm.app2a        Kubernetes     SYNCED (4m37s)     SYNCED (4m37s)     SYNCED (4m31s)     SYNCED (4m37s)     IGNORED     istiod-mesh2-59f6b874fb-mzxqw     1.24.0
 curl-5b549b49b8-xnzzk.app2b        Kubernetes     SYNCED (4m37s)     SYNCED (4m37s)     SYNCED (4m31s)     SYNCED (4m37s)     IGNORED     istiod-mesh2-59f6b874fb-mzxqw     1.24.0
 httpbin-7b549f7859-7k5gf.app2b     Kubernetes     SYNCED (4m31s)     SYNCED (4m31s)     SYNCED (4m31s)     SYNCED (4m31s)     IGNORED     istiod-mesh2-59f6b874fb-mzxqw     1.24.0
 httpbin-7b549f7859-bgblg.app2a     Kubernetes     SYNCED (4m32s)     SYNCED (4m32s)     SYNCED (4m31s)     SYNCED (4m32s)     IGNORED     istiod-mesh2-59f6b874fb-mzxqw     1.24.0
-```
+----
 <!--
 ```bash { name=validation-print-ps tag=multiple-meshes}
     istioctl ps -i istio-system1
     istioctl ps -i istio-system2
 ```
 -->
-#### Checking application connectivity
+[[checking-application-connectivity]]
+==== Checking application connectivity
 
 As both meshes are configured to use the `STRICT` mTLS peer authentication mode, the applications in namespace `app1` should not be able to communicate with the applications in namespaces `app2a` and `app2b`, and vice versa.
 To test whether the `curl` pod in namespace `app2a` can connect to the `httpbin` service in namespace `app1`, run the following commands:
 
-```console
+[source,console]
+----
 $ kubectl -n app2a exec deploy/curl -c curl -- curl -sIL http://httpbin.app1:8000
 HTTP/1.1 503 Service Unavailable
 content-length: 95
 content-type: text/plain
 date: Fri, 29 Nov 2024 08:58:28 GMT
 server: envoy
-```
+----
 <!--
 ```bash { name=validation-curl-app1 tag=multiple-meshes}
     response=$(kubectl -n app2a exec deploy/curl -c curl --   curl -s -o /dev/null -w "%{http_code}" http://httpbin.app1:8000)
@@ -290,7 +316,8 @@ server: envoy
 As expected, the response indicates that the connection was not successful. 
 In contrast, the same pod should be able to connect to the `httpbin` service in namespace `app2b`, because they are part of the same mesh:
 
-```console
+[source,console]
+----
 $ kubectl -n app2a exec deploy/curl -c curl -- curl -sIL http://httpbin.app2b:8000
 HTTP/1.1 200 OK
 access-control-allow-credentials: true
@@ -301,7 +328,7 @@ date: Fri, 29 Nov 2024 08:57:52 GMT
 x-envoy-upstream-service-time: 0
 server: envoy
 transfer-encoding: chunked
-```
+----
 <!--
 ```bash { name=validation-curl-app2a tag=multiple-meshes}
     response=$(kubectl -n app2a exec deploy/curl -c curl -- curl -s -o /dev/null -w "%{http_code}" http://httpbin.app2b:8000)
@@ -314,11 +341,13 @@ transfer-encoding: chunked
     fi
 ```
 -->
-### Cleanup
+[[cleanup]]
+=== Cleanup
 
 To clean up the resources created in this guide, delete the `Istio` resources and the namespaces:
 
-```bash
+[source,bash]
+----
    kubectl delete istio mesh1 mesh2
    kubectl delete ns istio-system1 istio-system2 app1 app2a app2b
-```
+----

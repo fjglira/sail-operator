@@ -1,59 +1,70 @@
-[Return to Project Root](../README.md)
+include::../_variables.adoc[]
 
-# Table of Contents
+link:../README.md[Return to Project Root]
 
-- [Installing the istioctl tool](#installing-the-istioctl-tool)
-  - [Prerequisites](#prerequisites)
-  - [Procedure](#procedure)
+[[toc]]
+== Table of Contents
 
-## Installing the istioctl tool
+- <<installing-the-istioctl-tool,Installing the istioctl tool>>
+  - <<prerequisites,Prerequisites>>
+  - <<procedure,Procedure>>
+
+[[installing-the-istioctl-tool]]
+== Installing the istioctl tool
 
 The `istioctl` tool is a configuration command line utility that allows service 
 operators to debug and diagnose Istio service mesh deployments.
 
 
-### Prerequisites
+[[prerequisites]]
+=== Prerequisites
 
 Use an `istioctl` version that is the same version as the Istio control plane 
-for the Service Mesh deployment. See [Istio Releases](https://github.com/istio/istio/releases) for a list of valid 
+for the Service Mesh deployment. See link:https://github.com/istio/istio/releases[Istio Releases] for a list of valid 
 releases, including Beta releases. 
 
-### Procedure
+[[procedure]]
+=== Procedure
 
 1. Confirm if you have `istioctl` installed, and if so which version, by running 
 the following command at the terminal:
 
-    ```sh
+    [source,sh]
+    ----
     $ istioctl version
-    ```
+    ----
 
 2. Confirm the version of Istio you are using by running the following command 
 at the terminal:
 
-    ```sh
+    [source,sh]
+    ----
     $ oc get istio
-    ```
+    ----
 
 3. Install `istioctl` by running the following command at the terminal: 
 
-    ```sh
+    [source,sh]
+    ----
     $ curl -sL https://istio.io/downloadIstioctl | ISTIO_VERSION=<version> sh -
-    ```
+    ----
     Replace `<version>` with the version of Istio you are using.
 
 4. Put the `istioctl` directory on path by running the following command at the terminal:
   
-    ```sh
+    [source,sh]
+    ----
     $ export PATH=$HOME/.istioctl/bin:$PATH
-    ```
+    ----
 
 5. Confirm that the `istioctl` client version and the Istio control plane 
 version now match (or are within one version) by running the following command
 at the terminal:
 
-    ```sh
+    [source,sh]
+    ----
     $ istioctl version
-    ```
-For more information on usage, see the [Istioctl documentation](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/).
+    ----
+For more information on usage, see the link:https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/[Istioctl documentation].
 
 *Note*: `istioctl install` is not supported. The Sail Operator installs Istio.

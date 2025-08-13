@@ -1,6 +1,9 @@
-[Return to Project Root](../README.md)
+include::../_variables.adoc[]
 
-## Installing the Bookinfo Application
+link:../README.md[Return to Project Root]
+
+[[installing-the-bookinfo-application]]
+== Installing the Bookinfo Application
 
 You can use the `bookinfo` example application to explore service mesh features. 
 Using the `bookinfo` application, you can easily confirm that requests from a 
@@ -25,8 +28,8 @@ displays reviews with black stars. If a user does not log into the `bookinfo`
 application, then the mesh routes requests to the `reviews-v3` service, and the 
 application displays reviews with red stars.
 
-For more information, see [Bookinfo Application](https://istio.io/latest/docs/examples/bookinfo/) in the upstream Istio documentation.
+For more information, see link:https://istio.io/latest/docs/examples/bookinfo/[Bookinfo Application] in the upstream Istio documentation.
 
-After following the instructions for [Deploying the application](https://istio.io/latest/docs/examples/bookinfo/#start-the-application-services), **you 
-will need to create and configure a gateway** for the `bookinfo` application to 
+After following the instructions for link:https://istio.io/latest/docs/examples/bookinfo/#start-the-application-services[Deploying the application], *you 
+will need to create and configure a gateway* for the `bookinfo` application to 
 be accessible outside the cluster.

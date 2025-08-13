@@ -1,26 +1,32 @@
-[Return to Project Root](../README.md)
+include::../_variables.adoc[]
 
-# Table of Contents
+link:../README.md[Return to Project Root]
 
-- [Observability Integrations](#observability-integrations)
-  - [Scraping metrics using the OpenShift monitoring stack](#scraping-metrics-using-the-openshift-monitoring-stack)
-  - [Configure tracing with OpenShift distributed tracing](#configure-tracing-with-openshift-distributed-tracing)
-  - [Integrating with Kiali](#integrating-with-kiali)
-    - [Integrating Kiali with the OpenShift monitoring stack](#integrating-kiali-with-the-openshift-monitoring-stack)
-    - [Integrating Kiali with OpenShift Distributed Tracing](#integrating-kiali-with-openshift-distributed-tracing)
+[[toc]]
+== Table of Contents
 
-## Observability Integrations
+- <<observability-integrations,Observability Integrations>>
+  - <<scraping-metrics-using-the-openshift-monitoring-stack,Scraping metrics using the OpenShift monitoring stack>>
+  - <<configure-tracing-with-openshift-distributed-tracing,Configure tracing with OpenShift distributed tracing>>
+  - <<integrating-with-kiali,Integrating with Kiali>>
+    - <<integrating-kiali-with-the-openshift-monitoring-stack,Integrating Kiali with the OpenShift monitoring stack>>
+    - <<integrating-kiali-with-openshift-distributed-tracing,Integrating Kiali with OpenShift Distributed Tracing>>
 
-### Scraping metrics using the OpenShift monitoring stack
+[[observability-integrations]]
+== Observability Integrations
+
+[[scraping-metrics-using-the-openshift-monitoring-stack]]
+=== Scraping metrics using the OpenShift monitoring stack
 The easiest way to get started with production-grade metrics collection is to use OpenShift's user-workload monitoring stack. The following steps assume that you installed Istio into the `istio-system` namespace. Note that these steps are not specific to the Sail Operator, but describe how to configure user-workload monitoring for Istio in general.
 
 *Prerequisites*
-* User Workload monitoring is [enabled](https://docs.openshift.com/container-platform/latest/observability/monitoring/enabling-monitoring-for-user-defined-projects.html)
+* User Workload monitoring is link:https://docs.openshift.com/container-platform/latest/observability/monitoring/enabling-monitoring-for-user-defined-projects.html[enabled]
 
 *Steps*
 1. Create a ServiceMonitor for istiod.
 
-    ```yaml
+    [source,yaml]
+    ----
     apiVersion: monitoring.coreos.com/v1
     kind: ServiceMonitor
     metadata:
@@ -35,10 +41,11 @@ The easiest way to get started with production-grade metrics collection is to us
       endpoints:
       - port: http-monitoring
         interval: 30s
-    ```
+    ----
 1. Create a PodMonitor to scrape metrics from the istio-proxy containers. Note that *this resource has to be created in all namespaces where you are running sidecars*.
 
-    ```yaml
+    [source,yaml]
+    ----
     apiVersion: monitoring.coreos.com/v1
     kind: PodMonitor
     metadata:
@@ -76,11 +83,12 @@ The easiest way to get started with production-grade metrics collection is to us
         - sourceLabels: ["__meta_kubernetes_pod_name"]
           action: replace
           targetLabel: pod_name
-    ```
+    ----
 
 Congratulations! You should now be able to see your control plane and data plane metrics in the OpenShift Console. Just go to Observe -> Metrics and try the query `istio_requests_total`.
 
-### Configure tracing with OpenShift distributed tracing
+[[configure-tracing-with-openshift-distributed-tracing]]
+=== Configure tracing with OpenShift distributed tracing
 This section describes how to setup Istio with OpenShift Distributed Tracing to send distributed traces.
 
 *Prerequisites*
@@ -91,7 +99,8 @@ This section describes how to setup Istio with OpenShift Distributed Tracing to 
 
 *Steps*
 1. Configure Istio to enable tracing and include the OpenTelemetry settings:
-    ```yaml
+    [source,yaml]
+    ----
     meshConfig:
       enableTracing: true
       extensionProviders:
@@ -99,11 +108,12 @@ This section describes how to setup Istio with OpenShift Distributed Tracing to 
         opentelemetry:
           port: 4317
           service: otel-collector.istio-system.svc.cluster.local 
-    ```
+    ----
 The *service* field is the OpenTelemetry collector service in the `istio-system` namespace.
 
 2. Create an Istio telemetry resource to active the OpenTelemetry tracer
-    ```yaml
+    [source,yaml]
+    ----
     apiVersion: telemetry.istio.io/v1
     kind: Telemetry
     metadata:
@@ -114,34 +124,38 @@ The *service* field is the OpenTelemetry collector service in the `istio-system`
       - providers:
           - name: otel-tracing
             randomSamplingPercentage: 100
-    ```
+    ----
 
 3. Validate the integration: Generate some traffic
 
-We can [Deploy Bookinfo](addons.md#deploy-gateway-and-bookinfo) and generate some traffic.
+We can link:addons.md#deploy-gateway-and-bookinfo[Deploy Bookinfo] and generate some traffic.
 
 4. Validate the integration: See the traces in the UI
 
-```bash
+[source,bash]
+----
 kubectl get routes -n tempo tempo-sample-query-frontend-tempo
-```
+----
 
-If you [configure Kiali with OpenShift distributed tracing](#integrating-kiali-with-openshift-distributed-tracing) you can verify from there. 
+If you <<integrating-kiali-with-openshift-distributed-tracing,configure Kiali with OpenShift distributed tracing>> you can verify from there. 
 
-### Integrating with Kiali
+[[integrating-with-kiali]]
+=== Integrating with Kiali
 Integration with Kiali really depends on how you collect your metrics and traces. Note that Kiali is a separate project which for the purpose of this document we'll expect is installed using the Kiali operator. The steps here are not specific to Sail Operator, but describe how to configure Kiali for use with Istio in general.
 
-#### Integrating Kiali with the OpenShift monitoring stack
-If you followed [Scraping metrics using the OpenShift monitoring stack](#scraping-metrics-using-the-openshift-monitoring-stack), you can set up Kiali to retrieve metrics from there.
+[[integrating-kiali-with-the-openshift-monitoring-stack]]
+==== Integrating Kiali with the OpenShift monitoring stack
+If you followed <<scraping-metrics-using-the-openshift-monitoring-stack,Scraping metrics using the OpenShift monitoring stack>>, you can set up Kiali to retrieve metrics from there.
 
 *Prerequisites*
-* User Workload monitoring is [enabled](https://docs.openshift.com/container-platform/latest/observability/monitoring/enabling-monitoring-for-user-defined-projects.html) and [configured](#scraping-metrics-using-the-openshift-monitoring-stack)
+* User Workload monitoring is link:https://docs.openshift.com/container-platform/latest/observability/monitoring/enabling-monitoring-for-user-defined-projects.html[enabled] and <<scraping-metrics-using-the-openshift-monitoring-stack,configured>>
 * Kiali Operator is installed
 
 *Steps*
 1. Create a ClusterRoleBinding for Kiali, so it can view metrics from user-workload monitoring
 
-    ```yaml
+    [source,yaml]
+    ----
     apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRoleBinding
     metadata:
@@ -154,17 +168,19 @@ If you followed [Scraping metrics using the OpenShift monitoring stack](#scrapin
     - kind: ServiceAccount
       name: kiali-service-account
       namespace: istio-system
-    ```
+    ----
 1. Find out the revision name of your Istio instance. In our case it is `test`.
     
-    ```console
+    [source,console]
+    ----
     $ kubectl get istiorevisions.sailoperator.io 
     NAME   READY   STATUS    IN USE   VERSION   AGE
     test   True    Healthy   True     v1.21.0   119m
-    ```
+    ----
 1. Create a Kiali resource and point it to your Istio instance. Make sure to replace `test` with your revision name in the fields `config_map_name`, `istio_sidecar_injector_config_map_name`, `istiod_deployment_name` and `url_service_version`.
 
-    ```yaml
+    [source,yaml]
+    ----
     apiVersion: kiali.io/v1alpha1
     kind: Kiali
     metadata:
@@ -184,16 +200,18 @@ If you followed [Scraping metrics using the OpenShift monitoring stack](#scrapin
           thanos_proxy:
             enabled: true
           url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
-    ```
-#### Integrating Kiali with OpenShift Distributed Tracing
+    ----
+[[integrating-kiali-with-openshift-distributed-tracing]]
+==== Integrating Kiali with OpenShift Distributed Tracing
 This section describes how to setup Kiali with OpenShift Distributed Tracing to read the distributed traces.
 
 *Prerequisites*
-* Istio tracing is [Configured with OpenShift distributed tracing](#configure-tracing-with-openshift-distributed-tracing) 
+* Istio tracing is <<configure-tracing-with-openshift-distributed-tracing,Configured with OpenShift distributed tracing>>
 
 *Steps*
 1. Setup Kiali to access traces from the Tempo frontend: 
-    ```yaml
+    [source,yaml]
+    ----
     external_services:
       grafana:
         enabled: true
@@ -207,7 +225,7 @@ This section describes how to setup Kiali with OpenShift Distributed Tracing to 
         tempo_config:
           org_id: "1"
           datasource_uid: "a8d2ef1c-d31c-4de5-a90b-e7bc5252cd00"
-    ```
+    ----
 
 Where: 
 * `external_services.grafana` section: Is just needed to see the "View in Tracing" link from the Traces tab
