@@ -1,0 +1,63 @@
+input:
+  directories:
+    - "../sail-operator/docs/general"
+  include:
+    - "*.adoc"
+  exclude: []
+  recursive: true
+
+tags:
+  step_tags:
+    - "go-e2e-step"
+  test_start:
+    comment_markers:
+      - "<!-- test-start:"
+      - "// test-start:"
+    attribute_key: "init"
+  test_end:
+    comment_markers:
+      - "<!-- test-end"
+      - "// test-end"
+    attribute_key: "end"
+  step_start:
+    comment_markers:
+      - "<!-- test-step-start:"
+      - "// test-step-start:"
+  step_end:
+    comment_markers:
+      - "<!-- test-step-end"
+      - "// test-step-end"
+  attributes:
+    step_name: ["step-name", "name"]
+    timeout: ["timeout"]
+    expected_exit_code: ["expected", "exit-code"]
+    skip_on_failure: ["skip-on-failure"]
+    template: ["template"]
+    retry: ["retry", "retries", "retry-count"]
+    retry_interval: ["retry-interval", "retry-delay"]
+
+output:
+  build_tag: "e2e"
+  directory: "tests/e2e/generated-sail"
+  file_prefix: "generated_"
+  file_suffix: "_test.go"
+  package_name: "e2e_generated"
+  clean_before_generate: true
+
+templates:
+  directory: "templates"
+  default: "ginkgo_default"
+  allow_override: true
+
+commands:
+  default_timeout: "30s"
+  default_expected_exit_code: 0
+  blocked_patterns:
+    - "rm -rf /"
+    - "mkfs"
+    - "dd if="
+  shell: "/bin/sh"
+  shell_flag: "-c"
+
+logging:
+  level: "info"

@@ -43,6 +43,8 @@ Now, let's see how to achieve this in Sail.
 == Setting up Istiod in HA mode: increasing replicaCount
 To set up Istiod in HA mode by increasing the `replicaCount`, you can create/modify the Istio resource:
 
+// test-start: Istiod HA ReplicaCount
+
 [source,yaml]
 ----
 apiVersion: sailoperator.io/v1
@@ -57,7 +59,10 @@ spec:
       replicaCount: 2   # <-- number of desired replicas
 ----
 
-ifdef::istio-ha-replicacount[]
+// test-step-start: Create namespace and apply Istio HA replicaCount
+
+[source,go-e2e-step,step-name="Create namespace and apply Istio HA replicaCount"]
+----
 kubectl create ns istio-system
 cat <<EOF | kubectl apply -f-
 apiVersion: sailoperator.io/v1
@@ -71,14 +76,22 @@ spec:
       autoscaleEnabled: false # <-- disable autoscaling
       replicaCount: 2   # <-- number of desired replicas
 EOF
-endif::[]
+----
+
+// test-step-end
 
 After applying this configuration, you can check the status of the Istiod pods:
 
-[source,bash,subs="attributes+"]
+// test-step-start: Verify istiod HA pods (replicaCount)
+
+[source,go-e2e-step,step-name="Verify istiod HA pods (replicaCount)",retry=3,retry-interval=5s]
 ----
 kubectl get pods -n istio-system -l app=istiod
 ----
+
+// test-step-end
+
+// test-end
 
 You should see two pods running, indicating that Istiod is now in HA mode.
 
@@ -103,6 +116,8 @@ Let's break down the configuration:
 [[setting-up-istiod-in-ha-mode-using-autoscaling]]
 == Setting up Istiod in HA mode: using autoscaling
 To set up Istiod in HA mode using autoscaling, you can create/modify the Istio resource as follows:
+
+// test-start: Istiod HA Autoscaling
 
 [source,yaml]
 ----
@@ -142,12 +157,43 @@ spec:
 EOF
 endif::[]
 
+// test-step-start: Create namespace and apply Istio HA autoscaling
+
+[source,go-e2e-step,step-name="Create namespace and apply Istio HA autoscaling"]
+----
+kubectl create ns istio-system
+cat <<EOF | kubectl apply -f-
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+spec:
+  namespace: istio-system
+  values:
+    pilot:
+      autoscaleMin: 2
+      autoscaleMax: 5
+      cpu:
+        targetAverageUtilization: 80
+      memory:
+        targetAverageUtilization: 80
+EOF
+----
+
+// test-step-end
+
 After applying this configuration, you can check the status of the Istiod pods:
 
-[source,bash,subs="attributes+"]
+// test-step-start: Verify istiod HA pods (autoscaling)
+
+[source,go-e2e-step,step-name="Verify istiod HA pods (autoscaling)",retry=3,retry-interval=5s]
 ----
 kubectl get pods -n istio-system -l app=istiod
 ----
+
+// test-step-end
+
+// test-end
 
 You should see at least two pods running, indicating that Istiod is now in HA mode.
 
