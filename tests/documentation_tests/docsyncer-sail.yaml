@@ -1,6 +1,6 @@
 input:
   directories:
-    - "../sail-operator/docs/general"
+    - "docs/general"
   include:
     - "*.adoc"
   exclude: []

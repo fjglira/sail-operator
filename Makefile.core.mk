@@ -244,6 +244,14 @@ test.docs: istioctl ## Run the documentation examples tests.
 	@PATH=$(LOCALBIN):$$PATH tests/documentation_tests/scripts/run-asciidocs-test.sh
 	@echo "Documentation examples tested successfully"
 
+.PHONY: test.docs-generated
+test.docs-generated: ## Run the tests generated from the documentation resulting from the sync parser.
+	@echo "Generating go documentation test from the documentation examples and running them."
+	@PATH=$(LOCALBIN):$$PATH tests/documentation_tests/scripts/generate-go-tests.sh
+	@echo "Generated go test from documentation using GoE2E-DocSyncer"
+	@echo "Starting run of the generated tests..."
+	go test -tags e2e ./tests/e2e/generated-sail -v -count=1 -ginkgo.v
+
 ##@ Build
 
 .PHONY: build
