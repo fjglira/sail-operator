@@ -15,7 +15,7 @@ import (
 // Source type: asciidoc
 // DO NOT EDIT — this file is regenerated on every run.
 
-var _ = Describe("Istiod HA Autoscaling", func() {
+var _ = Describe("Istiod HA Autoscaling", Label("documentation", "Istiod HA Autoscaling"), func() {
 
 	It("Create namespace and apply Istio HA autoscaling", func() {
 		{

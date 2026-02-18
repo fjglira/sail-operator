@@ -15,7 +15,7 @@ import (
 // Source type: asciidoc
 // DO NOT EDIT — this file is regenerated on every run.
 
-var _ = Describe("Istiod HA ReplicaCount", func() {
+var _ = Describe("Istiod HA ReplicaCount", Label("documentation", "Istiod HA ReplicaCount"), func() {
 
 	It("Create namespace and apply Istio HA replicaCount", func() {
 		{

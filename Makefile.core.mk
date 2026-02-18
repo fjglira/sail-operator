@@ -244,13 +244,16 @@ test.docs: istioctl ## Run the documentation examples tests.
 	@PATH=$(LOCALBIN):$$PATH tests/documentation_tests/scripts/run-asciidocs-test.sh
 	@echo "Documentation examples tested successfully"
 
-.PHONY: test.docs-generated
-test.docs-generated: ## Run the tests generated from the documentation resulting from the sync parser.
-	@echo "Generating go documentation test from the documentation examples and running them."
+.PHONY: test.generate-docs-test
+test.generate-docs-test: ## Generate Go tests from documentation using GoE2E-DocSyncer.
+	@echo "Generating go documentation test from the documentation examples..."
 	@PATH=$(LOCALBIN):$$PATH tests/documentation_tests/scripts/generate-go-tests.sh
 	@echo "Generated go test from documentation using GoE2E-DocSyncer"
-	@echo "Starting run of the generated tests..."
-	go test -tags e2e ./tests/e2e/generated-sail -v -count=1 -ginkgo.v
+
+.PHONY: test.docs-generated.kind
+test.docs-generated.kind: test.generate-docs-test ## Run the generated tests against a fresh KIND cluster with full setup and cleanup.
+	@echo "Running generated Go tests against KIND cluster with full environment setup..."
+	@PATH=$(LOCALBIN):$$PATH tests/documentation_tests/scripts/run-generated-go-tests.sh
 
 ##@ Build
 
