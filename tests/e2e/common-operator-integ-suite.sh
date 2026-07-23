@@ -248,6 +248,12 @@ check_cluster_operators() {
     return 0
   fi
 
+  # MicroShift doesn't expose ClusterOperator resources — skip gracefully
+  if ! oc get clusteroperator &>/dev/null; then
+    echo "ClusterOperator resource type not available on this cluster (MicroShift?), skipping check."
+    return 0
+  fi
+
   # Check if jq is installed
   if ! command -v jq &> /dev/null; then
     echo "ERROR: jq is required for the cluster operator health check. Please install jq."
