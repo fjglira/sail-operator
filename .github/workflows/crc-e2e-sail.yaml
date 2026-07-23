@@ -58,6 +58,7 @@ jobs:
 
       - name: Build and push operator image
         id: build
+        shell: bash
         env:
           HUB: quay.io/sail-dev
           BUILD_WITH_CONTAINER: "0"
