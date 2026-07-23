@@ -62,7 +62,9 @@ jobs:
           HUB: quay.io/sail-dev
           BUILD_WITH_CONTAINER: "0"
         run: |
-          TAG="crc-${{ github.run_id }}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          COMMIT_HASH="${GITHUB_SHA:0:7}"
+          TAG="ci-test-${COMMIT_HASH}-amd64"
           make docker-push HUB=${HUB} TAG=${TAG}
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
@@ -125,6 +127,18 @@ jobs:
             -e ARTIFACTS=/tmp/artifacts \
             ${{ needs.preflight.outputs.image }} \
             bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
+
+      - name: Debug - pod status and logs on failure
+        if: failure()
+        run: |
+          echo "=== Pods in all namespaces ==="
+          oc get pods -A
+          echo "=== sail-operator deployment events ==="
+          oc describe deployment sail-operator -n sail-operator || true
+          echo "=== sail-operator pod logs ==="
+          oc logs -n sail-operator -l app.kubernetes.io/name=sail-operator --tail=100 || true
+          echo "=== Recent cluster events ==="
+          oc get events -n sail-operator --sort-by='.lastTimestamp' || true
 
       - name: Upload test results
         if: always()
