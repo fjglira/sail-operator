@@ -36,6 +36,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 type testSuite string
@@ -283,14 +284,61 @@ spec:
 	createResource(k, "Gateway", yaml)
 }
 
-func createResource(k kubectl.Kubectl, kind, yaml string, specs ...string) {
-	for _, spec := range specs {
-		yaml += Indent(spec)
+func createResource(k kubectl.Kubectl, kind, baseYAML string, specs ...string) {
+	docYAML := baseYAML
+	if len(specs) > 0 {
+		merged, err := mergeSpecIntoResourceYAML(baseYAML, specs...)
+		Expect(err).NotTo(HaveOccurred(), withClusterName(fmt.Sprintf("%s YAML merge failed:", kind), k))
+		docYAML = merged
 	}
 
-	Log(fmt.Sprintf("%s YAML:", kind), Indent(yaml))
-	Expect(k.CreateFromString(yaml)).To(Succeed(), withClusterName(fmt.Sprintf("%s creation failed:", kind), k))
+	Log(fmt.Sprintf("%s YAML:", kind), Indent(docYAML))
+	Expect(k.CreateFromString(docYAML)).To(Succeed(), withClusterName(fmt.Sprintf("%s creation failed:", kind), k))
 	Success(withClusterName(fmt.Sprintf("%s created", kind), k))
+}
+
+// mergeSpecIntoResourceYAML deep-merges spec field fragments into a resource document.
+// Callers pass specs as YAML maps of fields under `spec` (e.g. values/profile). Deep merge
+// avoids duplicate `values:` keys that string-concatenation produced, which dropped earlier
+// fields (e.g. trustedZtunnelNamespace) when ISTIOD_MEMORY_REQUEST injected a second values block.
+func mergeSpecIntoResourceYAML(baseYAML string, specs ...string) (string, error) {
+	var doc map[string]any
+	if err := yaml.Unmarshal([]byte(baseYAML), &doc); err != nil {
+		return "", fmt.Errorf("unmarshal base resource: %w", err)
+	}
+
+	spec, _ := doc["spec"].(map[string]any)
+	if spec == nil {
+		spec = map[string]any{}
+		doc["spec"] = spec
+	}
+
+	for i, s := range specs {
+		var patch map[string]any
+		if err := yaml.Unmarshal([]byte(s), &patch); err != nil {
+			return "", fmt.Errorf("unmarshal spec fragment %d: %w", i, err)
+		}
+		deepMergeMaps(spec, patch)
+	}
+
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return "", fmt.Errorf("marshal merged resource: %w", err)
+	}
+	return string(out), nil
+}
+
+func deepMergeMaps(dst, src map[string]any) {
+	for key, srcVal := range src {
+		srcMap, srcIsMap := srcVal.(map[string]any)
+		if srcIsMap {
+			if dstMap, dstIsMap := dst[key].(map[string]any); dstIsMap {
+				deepMergeMaps(dstMap, srcMap)
+				continue
+			}
+		}
+		dst[key] = srcVal
+	}
 }
 
 func Indent(str string) string {

@@ -80,12 +80,14 @@ jobs:
           # Uses the `operator` label to avoid catching other smoke-tagged suites (e.g. ztwim).
           - name: operator
             filter: "operator && !tls-profile && !cert-manager"
-          # Core sidecar mode: istiod lifecycle and control-plane configuration.
+          # Sidecar smoke: single-version install + Ready checks only.
+          # Excludes update/RevisionBased suites (need 2 minors and more memory than CRC has).
           - name: sidecar
-            filter: "control-plane"
-          # Ambient mesh mode
+            filter: "control-plane && !update && sidecar"
+          # Ambient smoke: core install path only (Istio + IstioCNI + ZTunnel Ready).
+          # Excludes update/targetref/dependency/validation (heavy or cascade-prone on CRC).
           - name: ambient
-            filter: "ambient && !cert-manager"
+            filter: "ambient && slow && !update && !ambient-targetref && !ambient-dependency && !ambient-validation && !cert-manager && !multicluster"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -129,6 +131,8 @@ jobs:
         run: |
           echo "=== Nodes ==="
           oc get nodes -o wide || true
+          echo "=== Node allocatable / capacity ==="
+          oc describe nodes || true
           echo "=== All pods ==="
           oc get pods -A || true
           echo "=== sail-operator pod describe ==="
