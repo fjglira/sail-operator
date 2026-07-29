@@ -201,6 +201,9 @@ func GetLatestPatchVersions() []VersionInfo {
 		return latestSlice[i].Version.GreaterThan(latestSlice[j].Version)
 	})
 
+	if env.Get("E2E_VERSIONS_LIMIT", "") == "1" && len(latestSlice) > 1 {
+		return latestSlice[:1]
+	}
 	return latestSlice
 }
 

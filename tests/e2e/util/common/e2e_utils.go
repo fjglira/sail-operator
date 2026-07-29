@@ -213,6 +213,15 @@ spec:
   version: %s
   namespace: %s`
 	yaml = fmt.Sprintf(yaml, istioName, version, ControlPlaneNamespace)
+	if req := env.Get("ISTIOD_MEMORY_REQUEST", ""); req != "" {
+		specs = append(specs, fmt.Sprintf(`
+values:
+  pilot:
+    resources:
+      requests:
+        memory: %s
+        cpu: 100m`, req))
+	}
 	createResource(k, "Istio", yaml, specs...)
 }
 
@@ -240,6 +249,15 @@ spec:
   version: %s
   namespace: %s`
 	yaml = fmt.Sprintf(yaml, version, ZtunnelNamespace)
+	if req := env.Get("ZTUNNEL_MEMORY_REQUEST", ""); req != "" {
+		specs = append(specs, fmt.Sprintf(`
+values:
+  ztunnel:
+    resources:
+      requests:
+        memory: %s
+        cpu: 50m`, req))
+	}
 	createResource(k, "ZTunnel", yaml, specs...)
 }
 

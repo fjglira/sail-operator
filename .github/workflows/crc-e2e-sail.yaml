@@ -70,7 +70,7 @@ jobs:
   e2e:
     name: e2e / ${{ matrix.suite.name }}
     needs: [preflight, build-push]
-    runs-on: sail-runner
+    runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -114,6 +114,9 @@ jobs:
             -e SKIP_BUILD=true \
             -e XDG_CACHE_HOME=/tmp/cache \
             -e ARTIFACTS=/tmp/artifacts \
+            -e ISTIOD_MEMORY_REQUEST=256Mi \
+            -e ZTUNNEL_MEMORY_REQUEST=128Mi \
+            -e E2E_VERSIONS_LIMIT=1 \
             -e "GINKGO_LABEL_FILTER=${{ matrix.suite.filter }}" \
             ${{ needs.preflight.outputs.image }} \
             bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
