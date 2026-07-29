@@ -124,6 +124,26 @@ jobs:
       - name: Print OpenShift version
         run: oc version
 
+      - name: Debug cluster state on failure
+        if: failure()
+        run: |
+          echo "=== Nodes ==="
+          oc get nodes -o wide || true
+          echo "=== All pods ==="
+          oc get pods -A || true
+          echo "=== sail-operator pod describe ==="
+          oc describe pods -n sail-operator || true
+          echo "=== istio-system pod describe ==="
+          oc describe pods -n istio-system || true
+          echo "=== istio-cni pod describe ==="
+          oc describe pods -n istio-cni || true
+          echo "=== ztunnel pod describe ==="
+          oc describe pods -n ztunnel || true
+          echo "=== sail-operator logs ==="
+          oc logs -n sail-operator -l app=sail-operator --tail=100 || true
+          echo "=== Events ==="
+          oc get events -A --sort-by='.lastTimestamp' | tail -50 || true
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
