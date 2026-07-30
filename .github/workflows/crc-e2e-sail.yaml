@@ -111,7 +111,7 @@ jobs:
           oc describe node | sed -n '/Allocated resources:/,/Events:/p' || true
           oc get pods -A | grep -v Running | grep -v Completed || true
 
-      - name: Run smoke suites sequentially
+      - name: Run CRC smoke tests
         env:
           BUILD_IMAGE: ${{ needs.preflight.outputs.image }}
           OPERATOR_TAG: ${{ needs.build-push.outputs.tag }}
@@ -119,67 +119,60 @@ jobs:
           set -euo pipefail
           mkdir -p "${{ github.workspace }}/artifacts"
 
-          run_suite() {
-            local name="$1"
-            local filter="$2"
-            local skip_deploy="$3"
-            local art_dir="${{ github.workspace }}/artifacts/${name}"
-            mkdir -p "${art_dir}"
+          # One invocation: deploy operator once, run operator+sidecar+ambient smoke together.
+          # Sequential SKIP_DEPLOY suites were wrong — the first suite's cleanup uninstalls the
+          # operator, so later suites create CRs that never reconcile (DaemonSet not found).
+          FILTER='smoke && (operator || sidecar || ambient) && !tls-profile && !cert-manager && !ztwim'
 
-            echo "::group::e2e / ${name} (filter=${filter})"
-            # On failure, dump live cluster state into the suite artifact dir before the
-            # integ suite trap uninstalls the operator (post-job debug is too late).
-            set +e
-            docker run --rm \
-              --network=host \
-              --privileged \
-              -v "${{ github.workspace }}":/work \
-              -v "$HOME/.kube":/root/.kube \
-              -v "${art_dir}":/tmp/artifacts \
-              -e KUBECONFIG=/root/.kube/config \
-              -e HUB=quay.io/sail-dev \
-              -e TAG="${OPERATOR_TAG}" \
-              -e CI=true \
-              -e BUILD_WITH_CONTAINER=0 \
-              -e SKIP_BUILD=true \
-              -e SKIP_DEPLOY="${skip_deploy}" \
-              -e XDG_CACHE_HOME=/tmp/cache \
-              -e ARTIFACTS=/tmp/artifacts \
-              -e ISTIOD_MEMORY_REQUEST=128Mi \
-              -e ZTUNNEL_MEMORY_REQUEST=64Mi \
-              -e E2E_VERSIONS_LIMIT=1 \
-              -e OPERATOR_DEPLOY_TIMEOUT=10m \
-              -e OPERATOR_MEMORY_REQUEST=32Mi \
-              -e OPERATOR_MEMORY_LIMIT=256Mi \
-              -e OPERATOR_CPU_REQUEST=10m \
-              -e OPERATOR_CPU_LIMIT=200m \
-              -e "GINKGO_LABEL_FILTER=${filter}" \
-              "${BUILD_IMAGE}" \
-              bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
-            local rc=$?
-            set -e
-            if [ "${rc}" -ne 0 ]; then
-              echo "::error::suite ${name} failed (exit ${rc}); capturing cluster snapshot"
-              {
-                echo "=== pods -A ==="
-                oc get pods -A -o wide || true
-                echo "=== sail-operator ==="
-                oc get all,events -n sail-operator -o wide || true
-                oc describe pods -n sail-operator || true
-                oc describe deploy -n sail-operator || true
-                echo "=== node allocated ==="
-                oc describe node | sed -n '/Allocated resources:/,/Events:/p' || true
-              } | tee "${art_dir}/cluster-snapshot.txt"
-            fi
-            echo "::endgroup::"
-            return "${rc}"
-          }
-
-          # Operator first: deploys the operator and fails fast if install is broken.
-          run_suite "operator" "smoke && operator && !tls-profile" "false"
-          # Reuse the already-deployed operator for mesh smoke suites.
-          run_suite "sidecar" "smoke && sidecar" "true"
-          run_suite "ambient" "smoke && ambient" "true"
+          echo "::group::e2e smoke (filter=${FILTER})"
+          set +e
+          docker run --rm \
+            --network=host \
+            --privileged \
+            -v "${{ github.workspace }}":/work \
+            -v "$HOME/.kube":/root/.kube \
+            -v "${{ github.workspace }}/artifacts":/tmp/artifacts \
+            -e KUBECONFIG=/root/.kube/config \
+            -e HUB=quay.io/sail-dev \
+            -e TAG="${OPERATOR_TAG}" \
+            -e CI=true \
+            -e BUILD_WITH_CONTAINER=0 \
+            -e SKIP_BUILD=true \
+            -e XDG_CACHE_HOME=/tmp/cache \
+            -e ARTIFACTS=/tmp/artifacts \
+            -e ISTIOD_MEMORY_REQUEST=128Mi \
+            -e ZTUNNEL_MEMORY_REQUEST=64Mi \
+            -e E2E_VERSIONS_LIMIT=1 \
+            -e OPERATOR_DEPLOY_TIMEOUT=10m \
+            -e OPERATOR_MEMORY_REQUEST=32Mi \
+            -e OPERATOR_MEMORY_LIMIT=256Mi \
+            -e OPERATOR_CPU_REQUEST=10m \
+            -e OPERATOR_CPU_LIMIT=200m \
+            -e "GINKGO_LABEL_FILTER=${FILTER}" \
+            "${BUILD_IMAGE}" \
+            bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
+          rc=$?
+          set -e
+          if [ "${rc}" -ne 0 ]; then
+            echo "::error::CRC smoke failed (exit ${rc}); capturing cluster snapshot"
+            {
+              echo "=== pods -A ==="
+              oc get pods -A -o wide || true
+              echo "=== sail-operator ==="
+              oc get all,events -n sail-operator -o wide || true
+              oc describe pods -n sail-operator || true
+              oc describe deploy -n sail-operator || true
+              echo "=== istio-cni / istio-system / ztunnel ==="
+              oc get all,istiocni,istio,ztunnel -A || true
+              oc describe pods -n istio-cni || true
+              oc describe pods -n istio-system || true
+              oc describe pods -n ztunnel || true
+              echo "=== node allocated ==="
+              oc describe node | sed -n '/Allocated resources:/,/Events:/p' || true
+            } | tee "${{ github.workspace }}/artifacts/cluster-snapshot.txt"
+          fi
+          echo "::endgroup::"
+          exit "${rc}"
 
       - name: Print OpenShift version
         if: always()
