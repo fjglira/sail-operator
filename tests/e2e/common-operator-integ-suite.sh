@@ -281,7 +281,28 @@ check_cluster_operators() {
 install_operator() {
   echo "Installing sail-operator (KUBECONFIG=${KUBECONFIG})"
   "${COMMAND}" create namespace "${NAMESPACE}"
-  helm install sail-operator "${SOURCE_DIR}"/chart --namespace "${NAMESPACE}" --set image="${HUB}/${IMAGE_BASE}:${TAG}" --set operatorLogLevel=3
+
+  # Optional resource overrides for constrained CI (e.g. CRC on ubuntu-latest).
+  # Defaults stay in chart/values.yaml; set OPERATOR_*_REQUEST / OPERATOR_*_LIMIT to tune.
+  local helm_sets=(
+    --set "image=${HUB}/${IMAGE_BASE}:${TAG}"
+    --set "operatorLogLevel=3"
+  )
+  if [ -n "${OPERATOR_MEMORY_REQUEST:-}" ]; then
+    helm_sets+=(--set "operator.resources.requests.memory=${OPERATOR_MEMORY_REQUEST}")
+  fi
+  if [ -n "${OPERATOR_MEMORY_LIMIT:-}" ]; then
+    helm_sets+=(--set "operator.resources.limits.memory=${OPERATOR_MEMORY_LIMIT}")
+  fi
+  if [ -n "${OPERATOR_CPU_REQUEST:-}" ]; then
+    helm_sets+=(--set "operator.resources.requests.cpu=${OPERATOR_CPU_REQUEST}")
+  fi
+  if [ -n "${OPERATOR_CPU_LIMIT:-}" ]; then
+    helm_sets+=(--set "operator.resources.limits.cpu=${OPERATOR_CPU_LIMIT}")
+  fi
+
+  echo "Helm install overrides: ${helm_sets[*]}"
+  helm install sail-operator "${SOURCE_DIR}"/chart --namespace "${NAMESPACE}" "${helm_sets[@]}"
 }
 
 await_operator() {

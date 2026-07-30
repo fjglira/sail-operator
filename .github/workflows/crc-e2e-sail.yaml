@@ -85,10 +85,6 @@ jobs:
         with:
           pull-secret: ${{ secrets.CRC_PULL_SECRET }}
           preset: openshift
-          # Default CRC ~9Gi leaves OpenShift at ~93% memory requests; operator then
-          # fails to become Available within the deploy wait on ubuntu-latest.
-          memory: "14336"
-          cpus: "4"
 
       - name: Prepare CRC for smoke tests
         run: |
@@ -153,6 +149,10 @@ jobs:
               -e ZTUNNEL_MEMORY_REQUEST=64Mi \
               -e E2E_VERSIONS_LIMIT=1 \
               -e OPERATOR_DEPLOY_TIMEOUT=10m \
+              -e OPERATOR_MEMORY_REQUEST=32Mi \
+              -e OPERATOR_MEMORY_LIMIT=256Mi \
+              -e OPERATOR_CPU_REQUEST=10m \
+              -e OPERATOR_CPU_LIMIT=200m \
               -e "GINKGO_LABEL_FILTER=${filter}" \
               "${BUILD_IMAGE}" \
               bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
