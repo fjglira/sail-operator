@@ -287,6 +287,7 @@ install_operator() {
 await_operator() {
   echo "Awaiting operator deployment on (KUBECONFIG=${KUBECONFIG})"
   local name="${DEPLOYMENT_NAME}"
+  local timeout="${OPERATOR_DEPLOY_TIMEOUT:-5m}"
   if [ "${OLM}" == "true" ]; then
     local csv_name
     local csv_file
@@ -298,7 +299,14 @@ await_operator() {
       DEPLOYMENT_NAME="${csv_name}"
     fi
   fi
-  "${COMMAND}" wait --for=condition=available deployment/"${name}" -n "${NAMESPACE}" --timeout=5m
+  if ! "${COMMAND}" wait --for=condition=available deployment/"${name}" -n "${NAMESPACE}" --timeout="${timeout}"; then
+    echo "ERROR: operator deployment/${name} not Available within ${timeout}; dumping status for diagnosis"
+    "${COMMAND}" get deployment,pods -n "${NAMESPACE}" -o wide || true
+    "${COMMAND}" describe deployment/"${name}" -n "${NAMESPACE}" || true
+    "${COMMAND}" describe pods -n "${NAMESPACE}" || true
+    "${COMMAND}" get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' || true
+    return 1
+  fi
 }
 
 # shellcheck disable=SC2329  # Function is invoked indirectly via trap

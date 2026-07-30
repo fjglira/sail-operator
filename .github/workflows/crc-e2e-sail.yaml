@@ -85,6 +85,35 @@ jobs:
         with:
           pull-secret: ${{ secrets.CRC_PULL_SECRET }}
           preset: openshift
+          # Default CRC ~9Gi leaves OpenShift at ~93% memory requests; operator then
+          # fails to become Available within the deploy wait on ubuntu-latest.
+          memory: "14336"
+          cpus: "4"
+
+      - name: Prepare CRC for smoke tests
+        run: |
+          set -euo pipefail
+          echo "=== Node resources before prep ==="
+          oc describe node | sed -n '/Allocatable:/,/Allocated resources:/p;/Allocated resources:/,/Events:/p' || true
+
+          # Marketplace catalog pods are not needed for helm-based smoke and often sit in
+          # ImagePullBackOff while consuming request budget on small CRC nodes.
+          oc scale deployment -n openshift-marketplace --all --replicas=0 || true
+          oc delete pods -n openshift-marketplace --all --force --grace-period=0 || true
+
+          echo "Waiting for cluster operators to settle..."
+          for i in $(seq 1 30); do
+            if oc wait clusteroperator --all --for=condition=Available=True --for=condition=Progressing=False --for=condition=Degraded=False --timeout=30s 2>/dev/null; then
+              echo "Cluster operators stable"
+              break
+            fi
+            echo "attempt ${i}/30: clusteroperators not stable yet"
+            sleep 10
+          done
+
+          echo "=== Node resources after prep ==="
+          oc describe node | sed -n '/Allocated resources:/,/Events:/p' || true
+          oc get pods -A | grep -v Running | grep -v Completed || true
 
       - name: Run smoke suites sequentially
         env:
@@ -102,6 +131,9 @@ jobs:
             mkdir -p "${art_dir}"
 
             echo "::group::e2e / ${name} (filter=${filter})"
+            # On failure, dump live cluster state into the suite artifact dir before the
+            # integ suite trap uninstalls the operator (post-job debug is too late).
+            set +e
             docker run --rm \
               --network=host \
               --privileged \
@@ -120,10 +152,27 @@ jobs:
               -e ISTIOD_MEMORY_REQUEST=128Mi \
               -e ZTUNNEL_MEMORY_REQUEST=64Mi \
               -e E2E_VERSIONS_LIMIT=1 \
+              -e OPERATOR_DEPLOY_TIMEOUT=10m \
               -e "GINKGO_LABEL_FILTER=${filter}" \
               "${BUILD_IMAGE}" \
               bash -c "git config --global --add safe.directory /work && cd /work && make test.e2e.ocp"
+            local rc=$?
+            set -e
+            if [ "${rc}" -ne 0 ]; then
+              echo "::error::suite ${name} failed (exit ${rc}); capturing cluster snapshot"
+              {
+                echo "=== pods -A ==="
+                oc get pods -A -o wide || true
+                echo "=== sail-operator ==="
+                oc get all,events -n sail-operator -o wide || true
+                oc describe pods -n sail-operator || true
+                oc describe deploy -n sail-operator || true
+                echo "=== node allocated ==="
+                oc describe node | sed -n '/Allocated resources:/,/Events:/p' || true
+              } | tee "${art_dir}/cluster-snapshot.txt"
+            fi
             echo "::endgroup::"
+            return "${rc}"
           }
 
           # Operator first: deploys the operator and fails fast if install is broken.
