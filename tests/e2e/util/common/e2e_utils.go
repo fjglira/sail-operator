@@ -438,4 +438,3 @@ func GetProxyVersionFromPod(podName, namespace string) (*semver.Version, error) 
 	}
 	return nil, fmt.Errorf("error getting proxy version from pod %s: version not found in output: %s", podName, output)
 }
-
