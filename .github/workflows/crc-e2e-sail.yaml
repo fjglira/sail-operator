@@ -86,7 +86,7 @@ jobs:
   e2e:
     name: e2e smoke openshift local
     needs: [preflight, build-push]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
